@@ -21,7 +21,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 
 # Application source (see .dockerignore for what's excluded)
-COPY package.json index.js swagger.js ./
+COPY package.json index.js swagger.js cloudinary.js ./
 COPY db ./db
 COPY routes ./routes
 COPY middleware ./middleware
