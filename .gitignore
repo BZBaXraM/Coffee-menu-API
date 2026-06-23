@@ -5,6 +5,7 @@ client/node_modules/
 # Environment
 .env
 .env.local
+.env.production
 
 # Build output
 client/dist/

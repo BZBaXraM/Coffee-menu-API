@@ -10,14 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package.json ./
 RUN npm install --omit=dev --build-from-source
 
-# ---- client: build the React/Vite frontend (served by Express in prod) ----
-FROM node:22-bookworm-slim AS client
-WORKDIR /app/client
-COPY client/package.json ./
-RUN npm install
-COPY client/ ./
-RUN npm run build
-
 # ---- runtime: slim image with only what the API needs ----
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production \
@@ -33,9 +25,6 @@ COPY package.json index.js swagger.js ./
 COPY db ./db
 COPY routes ./routes
 COPY middleware ./middleware
-
-# Built frontend (Express serves this in production)
-COPY --from=client /app/client/dist ./client/dist
 
 # Persisted data lives here (mounted as a volume in compose)
 RUN mkdir -p /data /app/uploads

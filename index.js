@@ -4,6 +4,7 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
 const { initDB } = require('./db/database');
@@ -38,11 +39,12 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/settings', require('./routes/settings'));
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'client/dist')));
+const clientDist = path.join(__dirname, 'client/dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
   // Express 5 / path-to-regexp no longer accepts a bare '*' path string, so use a
   // middleware fallback to serve the SPA for client-side routes like /admin.
-  app.use((req, res) => res.sendFile(path.join(__dirname, 'client/dist/index.html')));
+  app.use((req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
 let shuttingDown = false;
