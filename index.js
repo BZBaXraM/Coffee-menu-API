@@ -1,4 +1,6 @@
 require('dotenv').config();
+// .env.local overrides .env (local secrets / per-machine config, gitignored)
+require('dotenv').config({ path: '.env.local', override: true });
 const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');

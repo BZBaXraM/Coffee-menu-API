@@ -60,6 +60,8 @@ cp .env.example .env
 
 Image hosting is optional: when the `CLOUDINARY_*` vars are set, uploaded dish/promotion photos go to Cloudinary; otherwise they fall back to local `/uploads`.
 
+Env files load in order — `.env` first, then `.env.local` **overrides** it. Keep shared/committed defaults in `.env` and per-machine secrets in `.env.local` (both are gitignored).
+
 ### Run (development)
 
 ```bash
