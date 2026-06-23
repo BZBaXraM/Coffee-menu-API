@@ -1,0 +1,30 @@
+{
+  "name": "qr-menu",
+  "version": "1.0.0",
+  "description": "QR Menu system for restaurants",
+  "license": "ISC",
+  "author": "bahram",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "dev:all": "npx concurrently \"node --watch index.js\" \"cd client && bun run dev\"",
+    "build": "cd client && bun run build",
+    "install:all": "bun install && cd client && bun install"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "multer": "^1.4.5-lts.1",
+    "qrcode": "^1.5.3",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
