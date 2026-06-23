@@ -83,6 +83,8 @@ To test admin endpoints in Swagger UI: click **Authorize** and enter the admin p
 
 ## Key Patterns
 
+**Image hosting (Cloudinary)**: Dish/promotion photos are hosted on Cloudinary (folder `coffee`) and the DB stores the full `https://res.cloudinary.com/...` URL in `dishes.image` / `promotions.image`. `cloudinary.js` configures the SDK from `CLOUDINARY_*` env vars and exposes `uploadImage(fileOrBuffer, publicId)` / `deleteImage(url)` / `isConfigured`. Admin upload routes (`routes/admin.js`) buffer files in memory (`multer.memoryStorage`) and call `persistImage()`, which uploads to Cloudinary when configured and **falls back to writing local `/uploads`** if Cloudinary is unconfigured or the upload fails. The frontend uses `src={dish.image}` directly for both absolute Cloudinary URLs and legacy `/uploads/...` paths. One-time migration of existing local photos: `bun run cloudinary:upload` (uploads `uploads/*.png` → `coffee/` and rewrites the DB URLs). The seed `dishPhotos` map in `db/database.js` still seeds `/uploads/...` as a local fallback for fresh installs.
+
 **Multilingual content**: All dish names/descriptions/ingredients are stored as JSON strings in SQLite. Use `tl(value, language)` from `AppContext` to extract the correct language. Falls back to `en` then `az`.
 
 **Dish cards & modal**: `DishCard` is a Tailwind card with a subtle hover lift (`hover:-translate-y-0.5 hover:shadow-lg`); clicking it opens `DishModal`. `DishModal` is a bottom-sheet (mobile) / centered dialog (desktop) showing the dish image/emoji header, description, dietary badges, an ingredients chip list, and a nutrition grid (calories/protein/fat/carbs) — plus an add-to-cart button.

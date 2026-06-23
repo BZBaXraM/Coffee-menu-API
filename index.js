@@ -65,12 +65,5 @@ server.on('error', handleServerError);
 wss.on('error', handleServerError);
 
 server.listen(PORT, () => {
-  console.log(`✅ QR Menu backend → http://localhost:${PORT}`);
-  console.log(`📄 Swagger UI     → http://localhost:${PORT}/api-docs`);
-  if (process.env.NODE_ENV === 'production') {
-    console.log(`📱 Admin panel    → http://localhost:${PORT}/admin (password: admin123)`);
-  } else {
-    console.log(`🎨 Frontend dev   → cd client && bun run dev (http://localhost:5173)`);
-    console.log(`📱 Admin panel    → http://localhost:5173/admin (password: admin123)`);
-  }
+  console.log(`✅ QR Menu backend running on port ${PORT}`);
 });

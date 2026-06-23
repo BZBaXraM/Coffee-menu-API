@@ -54,6 +54,11 @@ cp .env.example .env
 | `GROQ_API_KEY` | — | Groq API key (required for AI chat) |
 | `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model used by the AI chat |
 | `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq OpenAI-compatible API base URL |
+| `CLOUDINARY_CLOUD_NAME` | — | Cloudinary cloud name (for hosted dish/promo images) |
+| `CLOUDINARY_API_KEY` | — | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | — | Cloudinary API secret |
+
+Image hosting is optional: when the `CLOUDINARY_*` vars are set, uploaded dish/promotion photos go to Cloudinary; otherwise they fall back to local `/uploads`.
 
 ### Run (development)
 
@@ -125,7 +130,3 @@ client/               ← React 18 + Vite + Tailwind CSS v4
 ## License
 
 ISC
-# Coffee-menu-API
-# Coffee-menu-API
-# Coffee-menu-API
-# Coffee-menu-API

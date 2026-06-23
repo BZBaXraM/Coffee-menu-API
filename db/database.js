@@ -155,6 +155,22 @@ function initDB() {
   };
   const setImg = db.prepare("UPDATE dishes SET image = ? WHERE json_extract(name, '$.en') = ? AND (image IS NULL OR image = '')");
   for (const [name, img] of Object.entries(dishPhotos)) setImg.run(img, name);
+
+  // Normalize any local /uploads/* image to its Cloudinary delivery URL when
+  // Cloudinary is configured. The "coffee" folder holds one asset per file
+  // (public_id = filename without extension), and the version segment is
+  // optional for delivery, so the URL is fully deterministic — no re-upload
+  // needed. This fixes production DBs that were seeded before the migration.
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+  const folder = process.env.CLOUDINARY_FOLDER || 'coffee';
+  if (cloud) {
+    const localRows = db.prepare("SELECT id, image FROM dishes WHERE image LIKE '/uploads/%'").all();
+    const toCloud = db.prepare('UPDATE dishes SET image = ? WHERE id = ?');
+    for (const row of localRows) {
+      const fileName = row.image.replace('/uploads/', '');
+      toCloud.run(`https://res.cloudinary.com/${cloud}/image/upload/${folder}/${fileName}`, row.id);
+    }
+  }
 }
 
 function seedData(db) {
