@@ -78,9 +78,9 @@ router.post('/dishes', upload.single('image'), async (req, res) => {
   const d = req.body;
   const image = await persistImage(req.file);
   const result = db.prepare(`
-    INSERT INTO dishes (category_id, name, description, ingredients, price, old_price, weight, calories, protein, fat, carbs, allergens, image, is_available, is_featured, spice_level, is_vegetarian, is_vegan, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(d.category_id, d.name, d.description || null, d.ingredients || null, d.price, d.old_price || null, d.weight || null, d.calories || null, d.protein || null, d.fat || null, d.carbs || null, d.allergens || '[]', image, d.is_available ?? 1, d.is_featured ?? 0, d.spice_level ?? 0, d.is_vegetarian ?? 0, d.is_vegan ?? 0, d.sort_order ?? 0);
+    INSERT INTO dishes (category_id, name, description, ingredients, price, old_price, weight, calories, protein, fat, carbs, allergens, sizes, image, is_available, is_featured, spice_level, is_vegetarian, is_vegan, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(d.category_id, d.name, d.description || null, d.ingredients || null, d.price, d.old_price || null, d.weight || null, d.calories || null, d.protein || null, d.fat || null, d.carbs || null, d.allergens || '[]', d.sizes || '[]', image, d.is_available ?? 1, d.is_featured ?? 0, d.spice_level ?? 0, d.is_vegetarian ?? 0, d.is_vegan ?? 0, d.sort_order ?? 0);
   res.json({ id: result.lastInsertRowid });
 });
 router.put('/dishes/:id', upload.single('image'), async (req, res) => {
@@ -95,8 +95,8 @@ router.put('/dishes/:id', upload.single('image'), async (req, res) => {
   // delete the old file when it is being replaced or removed
   if (existing?.image && existing.image !== image) deleteUpload(existing.image);
   db.prepare(`
-    UPDATE dishes SET category_id=?, name=?, description=?, ingredients=?, price=?, old_price=?, weight=?, calories=?, protein=?, fat=?, carbs=?, allergens=?, image=?, is_available=?, is_featured=?, spice_level=?, is_vegetarian=?, is_vegan=?, sort_order=? WHERE id=?
-  `).run(d.category_id, d.name, d.description || null, d.ingredients || null, d.price, d.old_price || null, d.weight || null, d.calories || null, d.protein || null, d.fat || null, d.carbs || null, d.allergens || '[]', image, d.is_available ?? 1, d.is_featured ?? 0, d.spice_level ?? 0, d.is_vegetarian ?? 0, d.is_vegan ?? 0, d.sort_order ?? 0, req.params.id);
+    UPDATE dishes SET category_id=?, name=?, description=?, ingredients=?, price=?, old_price=?, weight=?, calories=?, protein=?, fat=?, carbs=?, allergens=?, sizes=?, image=?, is_available=?, is_featured=?, spice_level=?, is_vegetarian=?, is_vegan=?, sort_order=? WHERE id=?
+  `).run(d.category_id, d.name, d.description || null, d.ingredients || null, d.price, d.old_price || null, d.weight || null, d.calories || null, d.protein || null, d.fat || null, d.carbs || null, d.allergens || '[]', d.sizes || '[]', image, d.is_available ?? 1, d.is_featured ?? 0, d.spice_level ?? 0, d.is_vegetarian ?? 0, d.is_vegan ?? 0, d.sort_order ?? 0, req.params.id);
   res.json({ ok: true });
 });
 router.delete('/dishes/:id', (req, res) => {

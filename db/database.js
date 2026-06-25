@@ -38,6 +38,7 @@ function initDB() {
       fat REAL,
       carbs REAL,
       allergens TEXT DEFAULT '[]',
+      sizes TEXT DEFAULT '[]',
       image TEXT,
       is_available INTEGER DEFAULT 1,
       is_featured INTEGER DEFAULT 0,
@@ -84,6 +85,12 @@ function initDB() {
   const orderCols = db.prepare("PRAGMA table_info(orders)").all().map(c => c.name);
   if (!orderCols.includes('customer_phone')) {
     db.exec('ALTER TABLE orders ADD COLUMN customer_phone TEXT');
+  }
+
+  // Size variants (e.g. milkshakes S/M). JSON array of { label, price } in AZN.
+  const dishCols = db.prepare("PRAGMA table_info(dishes)").all().map(c => c.name);
+  if (!dishCols.includes('sizes')) {
+    db.exec("ALTER TABLE dishes ADD COLUMN sizes TEXT DEFAULT '[]'");
   }
 
   const count = db.prepare('SELECT COUNT(*) as c FROM categories').get();
@@ -156,6 +163,13 @@ function initDB() {
   const setImg = db.prepare("UPDATE dishes SET image = ? WHERE json_extract(name, '$.en') = ? AND (image IS NULL OR image = '')");
   for (const [name, img] of Object.entries(dishPhotos)) setImg.run(img, name);
 
+  // Backfill milkshake size variants on existing DBs (idempotent — only when the
+  // dish still has no sizes). Fresh installs already get these via seedData.
+  const milkshakeSizes = JSON.stringify([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]);
+  const milkshakeNames = ['Banana Milkshake', 'Vanilla Milkshake', 'Chocolate Milkshake', 'Strawberry Milkshake'];
+  const setSizes = db.prepare("UPDATE dishes SET sizes = ? WHERE json_extract(name, '$.en') = ? AND (sizes IS NULL OR sizes = '' OR sizes = '[]')");
+  for (const name of milkshakeNames) setSizes.run(milkshakeSizes, name);
+
   // Normalize any local /uploads/* image to its Cloudinary delivery URL when
   // Cloudinary is configured. The "coffee" folder holds one asset per file
   // (public_id = filename without extension), and the version segment is
@@ -214,11 +228,11 @@ function seedData(db) {
     { category_id: signatureId, name: t({ en: 'Tiramisu Latte', ru: 'Тирамису латте', az: 'Tiramisu Latte', tr: 'Tiramisu Latte' }), description: t({ en: 'Inspired by classic tiramisu.', ru: 'Вдохновлён классическим тирамису.', az: 'Klassik tiramisudan ilhamla.', tr: 'Klasik tiramisudan esinlenildi.' }), ingredients: t({ en: ['Espresso', 'Milk', 'Tiramisu syrup', 'Cocoa'], ru: ['Эспрессо', 'Молоко', 'Сироп тирамису', 'Какао'], az: ['Espresso', 'Süd', 'Tiramisu siropu', 'Kakao'], tr: ['Espresso', 'Süt', 'Tiramisu şurubu', 'Kakao'] }), price: 5.25, weight: 300, calories: 280, is_vegetarian: 1, is_featured: 1, sort_order: 4 },
     { category_id: signatureId, name: t({ en: 'Pistachio Latte', ru: 'Фисташковый латте', az: 'Püstə Latte', tr: 'Antep Fıstıklı Latte' }), description: t({ en: 'Pistachio & white chocolate.', ru: 'Фисташка и белый шоколад.', az: 'Püstə və ağ şokolad.', tr: 'Antep fıstığı ve beyaz çikolata.' }), ingredients: t({ en: ['Espresso', 'Milk', 'Pistachio syrup', 'White chocolate'], ru: ['Эспрессо', 'Молоко', 'Фисташковый сироп', 'Белый шоколад'], az: ['Espresso', 'Süd', 'Püstə siropu', 'Ağ şokolad'], tr: ['Espresso', 'Süt', 'Fıstık şurubu', 'Beyaz çikolata'] }), price: 5.25, weight: 300, calories: 290, allergens: '["Nuts","Dairy"]', is_vegetarian: 1, sort_order: 5 },
 
-    // Milkshakes
-    { category_id: shakeId, name: t({ en: 'Banana Milkshake', ru: 'Банановый коктейль', az: 'Banan Milkşeyk', tr: 'Muzlu Milkshake' }), description: t({ en: 'Creamy banana milkshake.', ru: 'Сливочный банановый коктейль.', az: 'Kremvari banan milkşeyk.', tr: 'Kremalı muzlu milkshake.' }), ingredients: t({ en: ['Banana', 'Milk', 'Ice cream'], ru: ['Банан', 'Молоко', 'Мороженое'], az: ['Banan', 'Süd', 'Dondurma'], tr: ['Muz', 'Süt', 'Dondurma'] }), price: 4, weight: 400, calories: 350, allergens: '["Dairy"]', is_vegetarian: 1, sort_order: 1 },
-    { category_id: shakeId, name: t({ en: 'Vanilla Milkshake', ru: 'Ванильный коктейль', az: 'Vanil Milkşeyk', tr: 'Vanilyalı Milkshake' }), description: t({ en: 'Classic vanilla milkshake.', ru: 'Классический ванильный коктейль.', az: 'Klassik vanil milkşeyk.', tr: 'Klasik vanilyalı milkshake.' }), ingredients: t({ en: ['Vanilla ice cream', 'Milk'], ru: ['Ванильное мороженое', 'Молоко'], az: ['Vanil dondurması', 'Süd'], tr: ['Vanilyalı dondurma', 'Süt'] }), price: 4, weight: 400, calories: 340, allergens: '["Dairy"]', is_vegetarian: 1, sort_order: 2 },
-    { category_id: shakeId, name: t({ en: 'Chocolate Milkshake', ru: 'Шоколадный коктейль', az: 'Şokolad Milkşeyk', tr: 'Çikolatalı Milkshake' }), description: t({ en: 'Rich chocolate milkshake.', ru: 'Насыщенный шоколадный коктейль.', az: 'Zəngin şokolad milkşeyk.', tr: 'Yoğun çikolatalı milkshake.' }), ingredients: t({ en: ['Chocolate ice cream', 'Milk', 'Cocoa'], ru: ['Шоколадное мороженое', 'Молоко', 'Какао'], az: ['Şokolad dondurması', 'Süd', 'Kakao'], tr: ['Çikolatalı dondurma', 'Süt', 'Kakao'] }), price: 4, weight: 400, calories: 380, allergens: '["Dairy"]', is_vegetarian: 1, sort_order: 3 },
-    { category_id: shakeId, name: t({ en: 'Strawberry Milkshake', ru: 'Клубничный коктейль', az: 'Çiyələk Milkşeyk', tr: 'Çilekli Milkshake' }), description: t({ en: 'Strawberry milkshake.', ru: 'Клубничный коктейль.', az: 'Çiyələk milkşeyk.', tr: 'Çilekli milkshake.' }), ingredients: t({ en: ['Strawberry', 'Ice cream', 'Milk'], ru: ['Клубника', 'Мороженое', 'Молоко'], az: ['Çiyələk', 'Dondurma', 'Süd'], tr: ['Çilek', 'Dondurma', 'Süt'] }), price: 4, weight: 400, calories: 350, allergens: '["Dairy"]', is_vegetarian: 1, sort_order: 4 },
+    // Milkshakes — come in two sizes (S 400ml / M 500ml). `price` mirrors the S price.
+    { category_id: shakeId, name: t({ en: 'Banana Milkshake', ru: 'Банановый коктейль', az: 'Banan Milkşeyk', tr: 'Muzlu Milkshake' }), description: t({ en: 'Creamy banana milkshake.', ru: 'Сливочный банановый коктейль.', az: 'Kremvari banan milkşeyk.', tr: 'Kremalı muzlu milkshake.' }), ingredients: t({ en: ['Banana', 'Milk', 'Ice cream'], ru: ['Банан', 'Молоко', 'Мороженое'], az: ['Banan', 'Süd', 'Dondurma'], tr: ['Muz', 'Süt', 'Dondurma'] }), price: 4, weight: 400, calories: 350, allergens: '["Dairy"]', is_vegetarian: 1, sizes: t([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]), sort_order: 1 },
+    { category_id: shakeId, name: t({ en: 'Vanilla Milkshake', ru: 'Ванильный коктейль', az: 'Vanil Milkşeyk', tr: 'Vanilyalı Milkshake' }), description: t({ en: 'Classic vanilla milkshake.', ru: 'Классический ванильный коктейль.', az: 'Klassik vanil milkşeyk.', tr: 'Klasik vanilyalı milkshake.' }), ingredients: t({ en: ['Vanilla ice cream', 'Milk'], ru: ['Ванильное мороженое', 'Молоко'], az: ['Vanil dondurması', 'Süd'], tr: ['Vanilyalı dondurma', 'Süt'] }), price: 4, weight: 400, calories: 340, allergens: '["Dairy"]', is_vegetarian: 1, sizes: t([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]), sort_order: 2 },
+    { category_id: shakeId, name: t({ en: 'Chocolate Milkshake', ru: 'Шоколадный коктейль', az: 'Şokolad Milkşeyk', tr: 'Çikolatalı Milkshake' }), description: t({ en: 'Rich chocolate milkshake.', ru: 'Насыщенный шоколадный коктейль.', az: 'Zəngin şokolad milkşeyk.', tr: 'Yoğun çikolatalı milkshake.' }), ingredients: t({ en: ['Chocolate ice cream', 'Milk', 'Cocoa'], ru: ['Шоколадное мороженое', 'Молоко', 'Какао'], az: ['Şokolad dondurması', 'Süd', 'Kakao'], tr: ['Çikolatalı dondurma', 'Süt', 'Kakao'] }), price: 4, weight: 400, calories: 380, allergens: '["Dairy"]', is_vegetarian: 1, sizes: t([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]), sort_order: 3 },
+    { category_id: shakeId, name: t({ en: 'Strawberry Milkshake', ru: 'Клубничный коктейль', az: 'Çiyələk Milkşeyk', tr: 'Çilekli Milkshake' }), description: t({ en: 'Strawberry milkshake.', ru: 'Клубничный коктейль.', az: 'Çiyələk milkşeyk.', tr: 'Çilekli milkshake.' }), ingredients: t({ en: ['Strawberry', 'Ice cream', 'Milk'], ru: ['Клубника', 'Мороженое', 'Молоко'], az: ['Çiyələk', 'Dondurma', 'Süd'], tr: ['Çilek', 'Dondurma', 'Süt'] }), price: 4, weight: 400, calories: 350, allergens: '["Dairy"]', is_vegetarian: 1, sizes: t([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]), sort_order: 4 },
 
     // Tea Selection
     { category_id: teaId, name: t({ en: 'English Breakfast', ru: 'Английский завтрак', az: 'İngilis Səhər Çayı', tr: 'İngiliz Kahvaltı Çayı' }), description: t({ en: 'Classic full-bodied black tea.', ru: 'Классический насыщенный чёрный чай.', az: 'Klassik dolğun qara çay.', tr: 'Klasik dolgun siyah çay.' }), ingredients: t({ en: ['Black tea'], ru: ['Чёрный чай'], az: ['Qara çay'], tr: ['Siyah çay'] }), price: 2.5, weight: 250, calories: 2, is_vegetarian: 1, is_vegan: 1, sort_order: 1 },
@@ -242,9 +256,9 @@ function seedData(db) {
     { category_id: addonId, name: t({ en: 'Whipped Cream', ru: 'Взбитые сливки', az: 'Çırpılmış Qaymaq', tr: 'Krem Şanti' }), description: t({ en: 'A topping of whipped cream.', ru: 'Топпинг из взбитых сливок.', az: 'Çırpılmış qaymaq əlavəsi.', tr: 'Krem şanti eklemesi.' }), ingredients: t({ en: ['Whipped cream'], ru: ['Взбитые сливки'], az: ['Çırpılmış qaymaq'], tr: ['Krem şanti'] }), price: 0.75, weight: 30, calories: 80, allergens: '["Dairy"]', is_vegetarian: 1, sort_order: 4 },
   ];
 
-  const insDish = db.prepare(`INSERT INTO dishes (category_id, name, description, ingredients, price, old_price, weight, calories, protein, fat, carbs, allergens, is_featured, spice_level, is_vegetarian, is_vegan, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insDish = db.prepare(`INSERT INTO dishes (category_id, name, description, ingredients, price, old_price, weight, calories, protein, fat, carbs, allergens, sizes, is_featured, spice_level, is_vegetarian, is_vegan, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   for (const d of dishes) {
-    insDish.run(d.category_id, d.name, d.description || null, d.ingredients || null, d.price, d.old_price || null, d.weight || null, d.calories || null, d.protein || null, d.fat || null, d.carbs || null, d.allergens || '[]', d.is_featured || 0, d.spice_level || 0, d.is_vegetarian || 0, d.is_vegan || 0, d.sort_order || 0);
+    insDish.run(d.category_id, d.name, d.description || null, d.ingredients || null, d.price, d.old_price || null, d.weight || null, d.calories || null, d.protein || null, d.fat || null, d.carbs || null, d.allergens || '[]', d.sizes || '[]', d.is_featured || 0, d.spice_level || 0, d.is_vegetarian || 0, d.is_vegan || 0, d.sort_order || 0);
   }
 
   db.prepare(`INSERT INTO promotions (title, description, discount_percent, is_active, sort_order) VALUES (?, ?, ?, ?, ?)`).run(
