@@ -113,13 +113,17 @@ function initDB() {
   // set by the operator is left untouched.
   db.prepare("UPDATE settings SET value = 'https://coffee-menu.bahram.site' WHERE key = 'menu_url' AND value = 'http://localhost:5173'").run();
 
-  // Seed demo content (categories/dishes/promo) ONLY on an empty DB in
-  // development. In production an empty DB is left empty on purpose — the menu
-  // is filled via the admin panel. This prevents a reset/fresh prod volume from
-  // auto-populating broken-image seed drinks (the seed dishes point at local
-  // /uploads/*.png that don't exist on prod).
+  // Seed demo content (categories/dishes/promo) ONLY on an empty DB.
+  // - In development: always seed.
+  // - In production: seed ONLY when Cloudinary is configured. The seed dishes
+  //   get local /uploads/*.png paths that don't exist on prod, but the
+  //   Cloudinary normalization at the end of initDB() rewrites those to working
+  //   Cloudinary delivery URLs. Without Cloudinary we'd get broken-image drinks,
+  //   so an empty prod DB is left empty (filled via the admin panel instead).
+  const cloudinaryReady = !!process.env.CLOUDINARY_CLOUD_NAME;
+  const allowSeed = process.env.NODE_ENV !== 'production' || cloudinaryReady;
   const count = db.prepare('SELECT COUNT(*) as c FROM categories').get();
-  if (count.c === 0 && process.env.NODE_ENV !== 'production') seedData(db);
+  if (count.c === 0 && allowSeed) seedData(db);
 
   // WhatsApp number is fixed for all installations (not editable from admin).
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('whatsapp_number', ?)").run('+994519923208');
