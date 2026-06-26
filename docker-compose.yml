@@ -16,8 +16,12 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
       GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
     volumes:
-      - db-data:/data          # SQLite database (persisted)
-      - ./uploads:/app/uploads # dish photos (persisted on host)
+      - db-data:/data                       # SQLite database (persisted)
+      - ./uploads:/app/uploads              # dish photos (persisted on host)
+      # Built React SPA so this single host serves both the menu (`/`, incl.
+      # QR deep links like /?table=1) and the API (`/api/*`). Build it first on
+      # the host: `cd ../client && bun install && bun run build`.
+      - ../client/dist:/app/client/dist:ro
 
 volumes:
   db-data:
