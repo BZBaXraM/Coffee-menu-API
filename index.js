@@ -41,27 +41,12 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/settings', require('./routes/settings'));
 
-// Serve the built React SPA from the same host as the API so a single domain
-// (e.g. coffee-menu.bahram.site) answers both `/` (menu, incl. QR deep links
-// like /?table=1) and `/api/*`. The build can sit next to the server (Docker
-// copies it to client/dist or public/) or in the sibling client/ workspace
-// during local production testing. Override with CLIENT_DIST if needed.
-const clientDist = [
-  process.env.CLIENT_DIST,
-  path.join(__dirname, 'client/dist'),
-  path.join(__dirname, 'public'),
-  path.join(__dirname, '../client/dist'),
-].find((dir) => dir && fs.existsSync(path.join(dir, 'index.html')));
-
-if (clientDist) {
+const clientDist = path.join(__dirname, 'client/dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   // Express 5 / path-to-regexp no longer accepts a bare '*' path string, so use a
-  // middleware fallback to serve the SPA for client-side routes like /admin and
-  // QR deep links. /api, /uploads, /ws and /api-docs are already handled above.
+  // middleware fallback to serve the SPA for client-side routes like /admin.
   app.use((req, res) => res.sendFile(path.join(clientDist, 'index.html')));
-  console.log(`🌐 Serving SPA from ${clientDist}`);
-} else {
-  console.log('ℹ️  No client build found — running API-only');
 }
 
 let shuttingDown = false;

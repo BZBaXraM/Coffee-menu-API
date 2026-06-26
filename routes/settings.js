@@ -34,7 +34,9 @@ router.put('/', adminAuth, (req, res) => {
 router.post('/qrcode', adminAuth, async (req, res) => {
   const { url, table } = req.body;
   const db = getDB();
-  const menuUrl = url || db.prepare("SELECT value FROM settings WHERE key='menu_url'").get()?.value || 'https://coffee-menu.bahram.site';
+  // Fall back to the customer-facing frontend host (NOT the API host) so QR
+  // codes open the menu, not the Express API which has no `/` route.
+  const menuUrl = url || db.prepare("SELECT value FROM settings WHERE key='menu_url'").get()?.value || 'https://coffee-app.bahram.site';
   const fullUrl = table ? `${menuUrl}?table=${table}` : menuUrl;
   try {
     const dataUrl = await QRCode.toDataURL(fullUrl, { width: 400, margin: 2, color: { dark: '#1A1A2E', light: '#FFFFFF' } });
