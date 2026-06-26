@@ -107,11 +107,11 @@ function initDB() {
   const setKey = db.prepare("UPDATE categories SET icon_type = 'svg', icon_key = ? WHERE icon = ? AND (icon_key IS NULL OR icon_key = '')");
   for (const [emoji, key] of Object.entries(emojiToKey)) setKey.run(key, emoji);
 
-  // Heal the default menu_url on installs that were seeded before production
-  // deployment (the seed below is INSERT OR IGNORE, so it won't overwrite an
-  // existing row). Only the old localhost default is replaced — a custom value
-  // set by the operator is left untouched.
-  db.prepare("UPDATE settings SET value = 'https://coffee-menu.bahram.site' WHERE key = 'menu_url' AND value = 'http://localhost:5173'").run();
+  // Heal default menu_url values on installs that were seeded before production
+  // deployment. QR codes must point at the customer-facing frontend, not the API
+  // host, otherwise opening the QR lands on Express and returns "Cannot GET /".
+  const frontendMenuUrl = 'https://coffee-app.bahram.site';
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'menu_url' AND value IN ('http://localhost:5173', 'https://coffee-menu.bahram.site')").run(frontendMenuUrl);
 
   // Seed demo content (categories/dishes/promo) ONLY on an empty DB.
   // - In development: always seed.
@@ -136,7 +136,7 @@ function initDB() {
     wifi_name: 'CoffeeInLab_Guest',
     wifi_password: 'goodcoffee',
     opening_hours: JSON.stringify({ monday: '08:00–22:00', tuesday: '08:00–22:00', wednesday: '08:00–22:00', thursday: '08:00–22:00', friday: '08:00–23:00', saturday: '09:00–23:00', sunday: '09:00–22:00' }),
-    menu_url: 'https://coffee-menu.bahram.site',
+    menu_url: frontendMenuUrl,
     admin_password: 'admin123',
     primary_language: 'en',
     currency_rates: JSON.stringify({ AZN: 1, USD: 0.588, EUR: 0.541, GBP: 0.461, AED: 2.16, TRY: 20.1, RUB: 54.2 }),
