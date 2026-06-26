@@ -93,8 +93,33 @@ function initDB() {
     db.exec("ALTER TABLE dishes ADD COLUMN sizes TEXT DEFAULT '[]'");
   }
 
+  // Professional category icons: built-in lucide SVG (icon_type='svg', icon_key)
+  // or a custom uploaded image (icon_type='image', icon_url). The legacy `icon`
+  // emoji column is kept as a fallback.
+  const catCols = db.prepare("PRAGMA table_info(categories)").all().map(c => c.name);
+  if (!catCols.includes('icon_type')) db.exec("ALTER TABLE categories ADD COLUMN icon_type TEXT DEFAULT 'svg'");
+  if (!catCols.includes('icon_key')) db.exec("ALTER TABLE categories ADD COLUMN icon_key TEXT");
+  if (!catCols.includes('icon_url')) db.exec("ALTER TABLE categories ADD COLUMN icon_url TEXT");
+
+  // Backfill lucide icon_key for categories that still only have the legacy
+  // emoji (idempotent — only fills rows with no icon_key yet).
+  const emojiToKey = { '☕': 'espresso', '🧊': 'iced', '⭐': 'signature', '🥤': 'milkshake', '🍵': 'tea', '🥐': 'sweets', '➕': 'addons' };
+  const setKey = db.prepare("UPDATE categories SET icon_type = 'svg', icon_key = ? WHERE icon = ? AND (icon_key IS NULL OR icon_key = '')");
+  for (const [emoji, key] of Object.entries(emojiToKey)) setKey.run(key, emoji);
+
+  // Heal the default menu_url on installs that were seeded before production
+  // deployment (the seed below is INSERT OR IGNORE, so it won't overwrite an
+  // existing row). Only the old localhost default is replaced — a custom value
+  // set by the operator is left untouched.
+  db.prepare("UPDATE settings SET value = 'https://coffee-menu.bahram.site' WHERE key = 'menu_url' AND value = 'http://localhost:5173'").run();
+
+  // Seed demo content (categories/dishes/promo) ONLY on an empty DB in
+  // development. In production an empty DB is left empty on purpose — the menu
+  // is filled via the admin panel. This prevents a reset/fresh prod volume from
+  // auto-populating broken-image seed drinks (the seed dishes point at local
+  // /uploads/*.png that don't exist on prod).
   const count = db.prepare('SELECT COUNT(*) as c FROM categories').get();
-  if (count.c === 0) seedData(db);
+  if (count.c === 0 && process.env.NODE_ENV !== 'production') seedData(db);
 
   // WhatsApp number is fixed for all installations (not editable from admin).
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('whatsapp_number', ?)").run('+994519923208');
@@ -107,7 +132,7 @@ function initDB() {
     wifi_name: 'CoffeeInLab_Guest',
     wifi_password: 'goodcoffee',
     opening_hours: JSON.stringify({ monday: '08:00–22:00', tuesday: '08:00–22:00', wednesday: '08:00–22:00', thursday: '08:00–22:00', friday: '08:00–23:00', saturday: '09:00–23:00', sunday: '09:00–22:00' }),
-    menu_url: 'http://localhost:5173',
+    menu_url: 'https://coffee-menu.bahram.site',
     admin_password: 'admin123',
     primary_language: 'en',
     currency_rates: JSON.stringify({ AZN: 1, USD: 0.588, EUR: 0.541, GBP: 0.461, AED: 2.16, TRY: 20.1, RUB: 54.2 }),
@@ -191,17 +216,17 @@ function seedData(db) {
   const t = (obj) => JSON.stringify(obj);
 
   const cats = [
-    { name: t({ en: 'Espresso Based', ru: 'На эспрессо', az: 'Espresso Əsaslı', tr: 'Espresso Bazlı' }), icon: '☕', sort_order: 1 },
-    { name: t({ en: 'Iced Coffees', ru: 'Холодный кофе', az: 'Buzlu Qəhvələr', tr: 'Buzlu Kahveler' }), icon: '🧊', sort_order: 2 },
-    { name: t({ en: 'Signature Drinks', ru: 'Фирменные напитки', az: 'İmza İçkilər', tr: 'İmza İçecekler' }), icon: '⭐', sort_order: 3 },
-    { name: t({ en: 'Milkshakes', ru: 'Молочные коктейли', az: 'Milkşeyklər', tr: 'Milkshake' }), icon: '🥤', sort_order: 4 },
-    { name: t({ en: 'Tea Selection', ru: 'Чайная карта', az: 'Çay Seçimi', tr: 'Çay Seçkisi' }), icon: '🍵', sort_order: 5 },
-    { name: t({ en: 'Sweets & Extras', ru: 'Сладости и закуски', az: 'Şirniyyat və Əlavələr', tr: 'Tatlılar ve Ekstralar' }), icon: '🥐', sort_order: 6 },
-    { name: t({ en: 'Add-ons', ru: 'Дополнения', az: 'Əlavələr', tr: 'İlaveler' }), icon: '➕', sort_order: 7 },
+    { name: t({ en: 'Espresso Based', ru: 'На эспрессо', az: 'Espresso Əsaslı', tr: 'Espresso Bazlı' }), icon: '☕', icon_key: 'espresso', sort_order: 1 },
+    { name: t({ en: 'Iced Coffees', ru: 'Холодный кофе', az: 'Buzlu Qəhvələr', tr: 'Buzlu Kahveler' }), icon: '🧊', icon_key: 'iced', sort_order: 2 },
+    { name: t({ en: 'Signature Drinks', ru: 'Фирменные напитки', az: 'İmza İçkilər', tr: 'İmza İçecekler' }), icon: '⭐', icon_key: 'signature', sort_order: 3 },
+    { name: t({ en: 'Milkshakes', ru: 'Молочные коктейли', az: 'Milkşeyklər', tr: 'Milkshake' }), icon: '🥤', icon_key: 'milkshake', sort_order: 4 },
+    { name: t({ en: 'Tea Selection', ru: 'Чайная карта', az: 'Çay Seçimi', tr: 'Çay Seçkisi' }), icon: '🍵', icon_key: 'tea', sort_order: 5 },
+    { name: t({ en: 'Sweets & Extras', ru: 'Сладости и закуски', az: 'Şirniyyat və Əlavələr', tr: 'Tatlılar ve Ekstralar' }), icon: '🥐', icon_key: 'sweets', sort_order: 6 },
+    { name: t({ en: 'Add-ons', ru: 'Дополнения', az: 'Əlavələr', tr: 'İlaveler' }), icon: '➕', icon_key: 'addons', sort_order: 7 },
   ];
 
-  const insCat = db.prepare('INSERT INTO categories (name, icon, sort_order) VALUES (?, ?, ?)');
-  const ids = cats.map(c => insCat.run(c.name, c.icon, c.sort_order).lastInsertRowid);
+  const insCat = db.prepare("INSERT INTO categories (name, icon, icon_type, icon_key, sort_order) VALUES (?, ?, 'svg', ?, ?)");
+  const ids = cats.map(c => insCat.run(c.name, c.icon, c.icon_key, c.sort_order).lastInsertRowid);
   const [espressoId, icedId, signatureId, shakeId, teaId, sweetsId, addonId] = ids;
 
   const dishes = [

@@ -47,19 +47,33 @@ router.use(adminAuth);
 router.get('/categories', (req, res) => {
   res.json(getDB().prepare('SELECT * FROM categories ORDER BY sort_order').all());
 });
-router.post('/categories', (req, res) => {
+router.post('/categories', upload.single('iconFile'), async (req, res) => {
   const db = getDB();
-  const { name, icon, sort_order } = req.body;
-  const result = db.prepare('INSERT INTO categories (name, icon, sort_order) VALUES (?, ?, ?)').run(name, icon || '🍽️', sort_order || 0);
+  const { name, icon, icon_type, icon_key, sort_order } = req.body;
+  const icon_url = req.file ? await persistImage(req.file) : (req.body.icon_url || null);
+  const result = db.prepare("INSERT INTO categories (name, icon, icon_type, icon_key, icon_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(name, icon || '🍽️', icon_type || 'svg', icon_key || null, icon_url, sort_order || 0);
   res.json({ id: result.lastInsertRowid });
 });
-router.put('/categories/:id', (req, res) => {
-  const { name, icon, sort_order, is_active } = req.body;
-  getDB().prepare('UPDATE categories SET name=?, icon=?, sort_order=?, is_active=? WHERE id=?').run(name, icon, sort_order, is_active, req.params.id);
+router.put('/categories/:id', upload.single('iconFile'), async (req, res) => {
+  const db = getDB();
+  const { name, icon, icon_type, icon_key, sort_order, is_active } = req.body;
+  const existing = db.prepare('SELECT icon_url FROM categories WHERE id=?').get(req.params.id);
+  // icon_url resolution: new upload > explicit value (empty string = removed) > keep existing
+  let icon_url;
+  if (req.file) icon_url = await persistImage(req.file);
+  else if (req.body.icon_url !== undefined) icon_url = req.body.icon_url || null;
+  else icon_url = existing?.icon_url || null;
+  if (existing?.icon_url && existing.icon_url !== icon_url) deleteUpload(existing.icon_url);
+  db.prepare('UPDATE categories SET name=?, icon=?, icon_type=?, icon_key=?, icon_url=?, sort_order=?, is_active=? WHERE id=?')
+    .run(name, icon, icon_type || 'svg', icon_key || null, icon_url, sort_order, is_active, req.params.id);
   res.json({ ok: true });
 });
 router.delete('/categories/:id', (req, res) => {
-  getDB().prepare('DELETE FROM categories WHERE id=?').run(req.params.id);
+  const db = getDB();
+  const existing = db.prepare('SELECT icon_url FROM categories WHERE id=?').get(req.params.id);
+  db.prepare('DELETE FROM categories WHERE id=?').run(req.params.id);
+  if (existing?.icon_url) deleteUpload(existing.icon_url);
   res.json({ ok: true });
 });
 
