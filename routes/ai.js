@@ -19,7 +19,7 @@ function getMenuContext(dishes) {
       let name;
       try { name = JSON.parse(d.name); } catch { name = { en: d.name }; }
       const nameEn = name.en || name.az || Object.values(name)[0];
-      return `- [ID:${d.id}] ${nameEn}: ${d.price} AZN${d.calories ? `, ${d.calories} kcal` : ""}${d.is_vegetarian ? ", vegetarian" : ""}${d.spice_level > 0 ? `, spicy (level ${d.spice_level})` : ""}`;
+      return `- ${nameEn}: ${d.price} AZN${d.calories ? `, ${d.calories} kcal` : ""}${d.is_vegetarian ? ", vegetarian" : ""}${d.spice_level > 0 ? `, spicy (level ${d.spice_level})` : ""}`;
     })
     .join("\n");
 }
@@ -52,7 +52,8 @@ Rules:
 - Keep responses short (2-4 sentences max)
 - CRITICAL: You CANNOT add items to the cart or place orders. Never say "I added X to your cart" or anything implying you took an action.
 - When you mention a dish that exists in the menu, it will automatically be shown to the customer with an "Add to cart" button below your message — you do NOT need to tell them to tap a card.
-- Never pretend to confirm or complete an order.`;
+- Never pretend to confirm or complete an order.
+- Never show internal product/dish IDs (e.g. "ID:11") to the customer.`;
 
   try {
     const baseUrl = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
