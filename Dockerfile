@@ -25,6 +25,9 @@ COPY package.json index.js swagger.js cloudinary.js ./
 COPY db ./db
 COPY routes ./routes
 COPY middleware ./middleware
+COPY public ./public
+COPY samples ./samples
+COPY drink-photo ./drink-photo
 
 # Persisted data lives here (mounted as a volume in compose)
 RUN mkdir -p /data /app/uploads

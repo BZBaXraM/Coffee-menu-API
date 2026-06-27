@@ -2,8 +2,6 @@ node_modules
 client/node_modules
 client/dist
 docs
-samples
-drink-photo
 fix-all
 uploads
 db/menu.db
