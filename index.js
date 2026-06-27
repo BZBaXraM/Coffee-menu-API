@@ -31,6 +31,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Fresh checkouts keep seeded menu photos in drink-photo/, while DB rows use
+// /uploads/*.png. Keep those public URLs working without requiring a copy step.
+app.use('/uploads', express.static(path.join(__dirname, 'drink-photo')));
+app.use('/drink-photo', express.static(path.join(__dirname, 'drink-photo')));
+app.use('/samples', express.static(path.join(__dirname, 'samples')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
@@ -40,6 +46,10 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/settings', require('./routes/settings'));
+
+app.get('/mekanlar', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'mekanlar.html'));
+});
 
 const clientDist = path.join(__dirname, 'client/dist');
 if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
