@@ -125,8 +125,8 @@ function initDB() {
   const count = db.prepare('SELECT COUNT(*) as c FROM categories').get();
   if (count.c === 0 && allowSeed) seedData(db);
 
-  // WhatsApp number is fixed for all installations (not editable from admin).
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('whatsapp_number', ?)").run('+994519923208');
+  // WhatsApp number: seed a default only on a fresh DB (admin-editable thereafter).
+  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('whatsapp_number', ?)").run('+994519923208');
 
   const defaults = {
     restaurant_name: JSON.stringify({ en: 'Coffee In Lab', ru: 'Coffee In Lab', az: 'Coffee In Lab', tr: 'Coffee In Lab' }),
