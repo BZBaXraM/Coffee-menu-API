@@ -181,12 +181,24 @@ router.get('/orders/stats', (req, res) => {
   const { sql, params } = orderFilters({ date });
   const row = db.prepare(
     `SELECT COUNT(*) AS count,
-            COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS revenue,
-            COALESCE(SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END), 0) AS newCount
+            COALESCE(SUM(CASE WHEN status = 'done' THEN total ELSE 0 END), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN status NOT IN ('done', 'cancelled') THEN total ELSE 0 END), 0) AS expectedRevenue,
+            COALESCE(SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END), 0) AS newCount,
+            COALESCE(SUM(CASE WHEN status = 'preparing' THEN 1 ELSE 0 END), 0) AS preparingCount,
+            COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) AS deliveredCount
      FROM orders ${sql}`
   ).get(...params);
   const currency = db.prepare(`SELECT currency FROM orders ${sql} ORDER BY created_at DESC LIMIT 1`).get(...params)?.currency || 'AZN';
-  res.json({ date, count: row.count, revenue: row.revenue, newCount: row.newCount, currency });
+  res.json({
+    date,
+    count: row.count,
+    revenue: row.revenue,
+    expectedRevenue: row.expectedRevenue,
+    newCount: row.newCount,
+    preparingCount: row.preparingCount,
+    deliveredCount: row.deliveredCount,
+    currency,
+  });
 });
 router.put('/orders/:id/status', (req, res) => {
   getDB().prepare('UPDATE orders SET status=? WHERE id=?').run(req.body.status, req.params.id);
