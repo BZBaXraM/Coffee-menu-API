@@ -143,14 +143,50 @@ router.delete('/promotions/:id', (req, res) => {
 });
 
 // Orders
+const ORDER_STATUSES = ['new', 'preparing', 'ready', 'done', 'cancelled'];
+
+// Build a SQL WHERE clause (+ params) from optional status / date query filters.
+// `date` is one of today | yesterday | month; created_at is stored as a UTC
+// CURRENT_TIMESTAMP, so we compare against localtime for the café's day.
+function orderFilters({ status, date }) {
+  const where = [];
+  const params = [];
+  if (ORDER_STATUSES.includes(status)) { where.push('status = ?'); params.push(status); }
+  if (date === 'today') {
+    where.push("date(created_at, 'localtime') = date('now', 'localtime')");
+  } else if (date === 'yesterday') {
+    where.push("date(created_at, 'localtime') = date('now', 'localtime', '-1 day')");
+  } else if (date === 'month') {
+    where.push("strftime('%Y-%m', created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')");
+  }
+  return { sql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+}
+
 router.get('/orders', (req, res) => {
   const db = getDB();
   const page   = Math.max(1, parseInt(req.query.page  || 1));
   const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit || 20)));
   const offset = (page - 1) * limit;
-  const total  = db.prepare('SELECT COUNT(*) AS c FROM orders').get().c;
-  const items  = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
+  const { sql, params } = orderFilters(req.query);
+  const total  = db.prepare(`SELECT COUNT(*) AS c FROM orders ${sql}`).get(...params).c;
+  const items  = db.prepare(`SELECT * FROM orders ${sql} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
   res.json({ items, total, page, totalPages: Math.ceil(total / limit) || 1, limit });
+});
+
+// Lightweight dashboard stats for the orders tab. Respects the same `date`
+// filter so the numbers track the period the admin is viewing (defaults today).
+router.get('/orders/stats', (req, res) => {
+  const db = getDB();
+  const date = ['today', 'yesterday', 'month'].includes(req.query.date) ? req.query.date : 'today';
+  const { sql, params } = orderFilters({ date });
+  const row = db.prepare(
+    `SELECT COUNT(*) AS count,
+            COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END), 0) AS newCount
+     FROM orders ${sql}`
+  ).get(...params);
+  const currency = db.prepare(`SELECT currency FROM orders ${sql} ORDER BY created_at DESC LIMIT 1`).get(...params)?.currency || 'AZN';
+  res.json({ date, count: row.count, revenue: row.revenue, newCount: row.newCount, currency });
 });
 router.put('/orders/:id/status', (req, res) => {
   getDB().prepare('UPDATE orders SET status=? WHERE id=?').run(req.body.status, req.params.id);
