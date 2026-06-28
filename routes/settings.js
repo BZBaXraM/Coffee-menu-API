@@ -61,15 +61,24 @@ router.put('/', adminAuth, (req, res) => {
 /**
  * POST /api/settings/qrcode  (admin)
  * Generate a PNG data-URL QR code for the menu URL, optionally with a table
- * number appended as ?table=N.
+ * number appended as ?table=N. The restaurant slug is added to the path so the
+ * QR opens the menu directly (e.g. https://coffee-app.bahram.site/coffee-in-lab?table=1).
  */
+// Frontend route slug for this install's menu. The menu_url stores only the
+// origin (the public frontend host); the SPA serves the menu at /<slug>.
+const RESTAURANT_SLUG = 'coffee-in-lab';
+
 router.post('/qrcode', adminAuth, async (req, res) => {
   const db = getDB();
   const { url, table } = req.body || {};
   const base = url || db.prepare("SELECT value FROM settings WHERE key = 'menu_url'").get()?.value || '';
   if (!base) return res.status(400).json({ error: 'No menu_url configured' });
 
-  let target = base;
+  // Append the slug to the path (before any query string) unless it's already there.
+  let target = base.replace(/\/+$/, '');
+  if (!new RegExp(`/${RESTAURANT_SLUG}(/|\\?|$)`).test(target)) {
+    target = `${target}/${RESTAURANT_SLUG}`;
+  }
   if (table != null && table !== '') {
     const sep = target.includes('?') ? '&' : '?';
     target = `${target}${sep}table=${encodeURIComponent(table)}`;
