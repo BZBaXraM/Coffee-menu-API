@@ -3,6 +3,46 @@ const path = require('path');
 
 let db;
 
+// Real dish photos, keyed by English name. This map is the single source of
+// truth for which dishes ship with a picture: the seed ONLY inserts dishes
+// whose name appears here, so a drink with no photo never gets initialized.
+// Drinks that had broken/empty photos on production were removed from here.
+const DISH_PHOTOS = {
+  'Cappuccino': '/uploads/cappuccino.png',
+  'Cold Brew': '/uploads/cold_brew.png',
+  'Tiramisu Latte': '/uploads/tiramisu_latte.png',
+  'Espresso': '/uploads/espresso.png',
+  'Iced Americano': '/uploads/iced_americano.png',
+  'Caramel Latte': '/uploads/caramel_latte.png',
+  'Banana Milkshake': '/uploads/banana_milkshake.png',
+  'Double Espresso': '/uploads/double_espresso.png',
+  'English Breakfast': '/uploads/english_breakfast.png',
+  'Americano': '/uploads/americano.png',
+  'Iced Latte': '/uploads/iced_latte.png',
+  'Iced Mocha': '/uploads/iced_mocha.png',
+  'Hazelnut Latte': '/uploads/hazelnut_latte.png',
+  'Vanilla Milkshake': '/uploads/vanilla_milkshake.png',
+  'Earl Grey': '/uploads/earl_grey.png',
+  'Flavored Syrup': '/uploads/flavored_syrup.png',
+  'Spanish Latte': '/uploads/spanish_latte.png',
+  'Green Tea': '/uploads/green_tea.png',
+  'Cookies': '/uploads/cookies.png',
+  'Raf': '/uploads/raf.png',
+  'Vanilla Cold Brew': '/uploads/vanilla_cold_brew.png',
+  'Pistachio Latte': '/uploads/pistachio_latte.png',
+  'Strawberry Milkshake': '/uploads/strawberry_milkshake.png',
+  'Oat / Almond Milk': '/uploads/oat_almond_milk.png',
+  'Hot Chocolate': '/uploads/hot_chocolate.png',
+};
+
+// English names of drinks removed for missing/empty photos. Deleted on every
+// startup so existing production DBs (which persist across deploys) get cleaned.
+const REMOVED_DISHES = [
+  'Cheesecake', 'Extra Espresso Shot', 'Butter Croissant', 'Chocolate Croissant',
+  'Chocolate Milkshake', 'Chamomile', 'Whipped Cream', 'Mint Tea', 'Brownie',
+  'Flat White', 'Fruit Tea',
+];
+
 function getDB() {
   if (!db) {
     db = new Database(process.env.DB_PATH || path.join(__dirname, 'menu.db'));
@@ -151,51 +191,19 @@ function initDB() {
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
 
+  // Remove drinks that shipped with broken/empty photos. Runs on every startup
+  // (idempotent) so production DBs — which persist across deploys — get cleaned.
+  const delDish = db.prepare("DELETE FROM dishes WHERE json_extract(name, '$.en') = ?");
+  for (const name of REMOVED_DISHES) delDish.run(name);
+
   // Attach real dish photos (idempotent — only sets when the dish still has no image).
-  const dishPhotos = {
-    'Cappuccino': '/uploads/cappuccino.png',
-    'Cold Brew': '/uploads/cold_brew.png',
-    'Tiramisu Latte': '/uploads/tiramisu_latte.png',
-    'Cheesecake': '/uploads/cheesecake.png',
-    'Espresso': '/uploads/espresso.png',
-    'Iced Americano': '/uploads/iced_americano.png',
-    'Caramel Latte': '/uploads/caramel_latte.png',
-    'Banana Milkshake': '/uploads/banana_milkshake.png',
-    'Double Espresso': '/uploads/double_espresso.png',
-    'Extra Espresso Shot': '/uploads/extra_espresso_shot.png',
-    'English Breakfast': '/uploads/english_breakfast.png',
-    'Butter Croissant': '/uploads/butter_croissant.png',
-    'Americano': '/uploads/americano.png',
-    'Iced Latte': '/uploads/iced_latte.png',
-    'Iced Mocha': '/uploads/iced_mocha.png',
-    'Hazelnut Latte': '/uploads/hazelnut_latte.png',
-    'Vanilla Milkshake': '/uploads/vanilla_milkshake.png',
-    'Earl Grey': '/uploads/earl_grey.png',
-    'Chocolate Croissant': '/uploads/chocolate_croissant.png',
-    'Flavored Syrup': '/uploads/flavored_syrup.png',
-    'Spanish Latte': '/uploads/spanish_latte.png',
-    'Chocolate Milkshake': '/uploads/chocolate_milkshake.png',
-    'Green Tea': '/uploads/green_tea.png',
-    'Cookies': '/uploads/cookies.png',
-    'Raf': '/uploads/raf.png',
-    'Vanilla Cold Brew': '/uploads/vanilla_cold_brew.png',
-    'Pistachio Latte': '/uploads/pistachio_latte.png',
-    'Strawberry Milkshake': '/uploads/strawberry_milkshake.png',
-    'Chamomile': '/uploads/chamomile.png',
-    'Mint Tea': '/uploads/mint_tea.png',
-    'Oat / Almond Milk': '/uploads/oat_almond_milk.png',
-    'Whipped Cream': '/uploads/whipped_cream.png',
-    'Brownie': '/uploads/brownie.png',
-    'Fruit Tea': '/uploads/fruit_tea.png',
-    'Hot Chocolate': '/uploads/hot_chocolate.png',
-  };
   const setImg = db.prepare("UPDATE dishes SET image = ? WHERE json_extract(name, '$.en') = ? AND (image IS NULL OR image = '')");
-  for (const [name, img] of Object.entries(dishPhotos)) setImg.run(img, name);
+  for (const [name, img] of Object.entries(DISH_PHOTOS)) setImg.run(img, name);
 
   // Backfill milkshake size variants on existing DBs (idempotent — only when the
   // dish still has no sizes). Fresh installs already get these via seedData.
   const milkshakeSizes = JSON.stringify([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]);
-  const milkshakeNames = ['Banana Milkshake', 'Vanilla Milkshake', 'Chocolate Milkshake', 'Strawberry Milkshake'];
+  const milkshakeNames = ['Banana Milkshake', 'Vanilla Milkshake', 'Strawberry Milkshake'];
   const setSizes = db.prepare("UPDATE dishes SET sizes = ? WHERE json_extract(name, '$.en') = ? AND (sizes IS NULL OR sizes = '' OR sizes = '[]')");
   for (const name of milkshakeNames) setSizes.run(milkshakeSizes, name);
 
@@ -240,7 +248,6 @@ function seedData(db) {
     { category_id: espressoId, name: t({ en: 'Americano', ru: 'Американо', az: 'Amerikano', tr: 'Americano' }), description: t({ en: 'Espresso diluted with hot water.', ru: 'Эспрессо, разбавленный горячей водой.', az: 'İsti su ilə durulaşdırılmış espresso.', tr: 'Sıcak suyla seyreltilmiş espresso.' }), ingredients: t({ en: ['Espresso', 'Hot water'], ru: ['Эспрессо', 'Горячая вода'], az: ['Espresso', 'İsti su'], tr: ['Espresso', 'Sıcak su'] }), price: 3, weight: 240, calories: 10, is_vegetarian: 1, is_vegan: 1, sort_order: 3 },
     { category_id: espressoId, name: t({ en: 'Cappuccino', ru: 'Капучино', az: 'Kapuçino', tr: 'Cappuccino' }), description: t({ en: 'Espresso with equal parts steamed milk & milk foam.', ru: 'Эспрессо с молоком и молочной пеной.', az: 'Bərabər nisbətdə süd və süd köpüyü ilə espresso.', tr: 'Eşit oranda buharlı süt ve köpükle espresso.' }), ingredients: t({ en: ['Espresso', 'Steamed milk', 'Milk foam'], ru: ['Эспрессо', 'Молоко', 'Молочная пена'], az: ['Espresso', 'Buxarlı süd', 'Süd köpüyü'], tr: ['Espresso', 'Buharlı süt', 'Süt köpüğü'] }), price: 4, weight: 200, calories: 120, is_vegetarian: 1, is_featured: 1, sort_order: 4 },
     { category_id: espressoId, name: t({ en: 'Raf', ru: 'Раф', az: 'Raf', tr: 'Raf' }), description: t({ en: 'Espresso with cream, vanilla sugar & milk.', ru: 'Эспрессо со сливками, ванильным сахаром и молоком.', az: 'Qaymaq, vanil şəkəri və süd ilə espresso.', tr: 'Krema, vanilyalı şeker ve sütle espresso.' }), ingredients: t({ en: ['Espresso', 'Cream', 'Vanilla sugar', 'Milk'], ru: ['Эспрессо', 'Сливки', 'Ванильный сахар', 'Молоко'], az: ['Espresso', 'Qaymaq', 'Vanil şəkəri', 'Süd'], tr: ['Espresso', 'Krema', 'Vanilyalı şeker', 'Süt'] }), price: 4.5, weight: 250, calories: 220, is_vegetarian: 1, sort_order: 5 },
-    { category_id: espressoId, name: t({ en: 'Flat White', ru: 'Флэт Уайт', az: 'Flat White', tr: 'Flat White' }), description: t({ en: 'Smooth ristretto with steamed milk.', ru: 'Мягкий ристретто с молоком.', az: 'Buxarlı süd ilə yumşaq ristretto.', tr: 'Buharlı sütle yumuşak ristretto.' }), ingredients: t({ en: ['Ristretto', 'Steamed milk'], ru: ['Ристретто', 'Молоко'], az: ['Ristretto', 'Buxarlı süd'], tr: ['Ristretto', 'Buharlı süt'] }), price: 4.5, weight: 180, calories: 130, is_vegetarian: 1, sort_order: 6 },
     { category_id: espressoId, name: t({ en: 'Hot Chocolate', ru: 'Горячий шоколад', az: 'İsti Şokolad', tr: 'Sıcak Çikolata' }), description: t({ en: 'Rich & creamy chocolate drink.', ru: 'Насыщенный сливочный шоколадный напиток.', az: 'Zəngin və kremvari şokolad içkisi.', tr: 'Yoğun ve kremalı çikolata içeceği.' }), ingredients: t({ en: ['Milk', 'Dark chocolate', 'Cocoa'], ru: ['Молоко', 'Тёмный шоколад', 'Какао'], az: ['Süd', 'Tünd şokolad', 'Kakao'], tr: ['Süt', 'Bitter çikolata', 'Kakao'] }), price: 5, weight: 250, calories: 300, allergens: '["Dairy"]', is_vegetarian: 1, sort_order: 7 },
 
     // Iced Coffees
@@ -260,33 +267,25 @@ function seedData(db) {
     // Milkshakes — come in two sizes (S 400ml / M 500ml). `price` mirrors the S price.
     { category_id: shakeId, name: t({ en: 'Banana Milkshake', ru: 'Банановый коктейль', az: 'Banan Milkşeyk', tr: 'Muzlu Milkshake' }), description: t({ en: 'Creamy banana milkshake.', ru: 'Сливочный банановый коктейль.', az: 'Kremvari banan milkşeyk.', tr: 'Kremalı muzlu milkshake.' }), ingredients: t({ en: ['Banana', 'Milk', 'Ice cream'], ru: ['Банан', 'Молоко', 'Мороженое'], az: ['Banan', 'Süd', 'Dondurma'], tr: ['Muz', 'Süt', 'Dondurma'] }), price: 4, weight: 400, calories: 350, allergens: '["Dairy"]', is_vegetarian: 1, sizes: t([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]), sort_order: 1 },
     { category_id: shakeId, name: t({ en: 'Vanilla Milkshake', ru: 'Ванильный коктейль', az: 'Vanil Milkşeyk', tr: 'Vanilyalı Milkshake' }), description: t({ en: 'Classic vanilla milkshake.', ru: 'Классический ванильный коктейль.', az: 'Klassik vanil milkşeyk.', tr: 'Klasik vanilyalı milkshake.' }), ingredients: t({ en: ['Vanilla ice cream', 'Milk'], ru: ['Ванильное мороженое', 'Молоко'], az: ['Vanil dondurması', 'Süd'], tr: ['Vanilyalı dondurma', 'Süt'] }), price: 4, weight: 400, calories: 340, allergens: '["Dairy"]', is_vegetarian: 1, sizes: t([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]), sort_order: 2 },
-    { category_id: shakeId, name: t({ en: 'Chocolate Milkshake', ru: 'Шоколадный коктейль', az: 'Şokolad Milkşeyk', tr: 'Çikolatalı Milkshake' }), description: t({ en: 'Rich chocolate milkshake.', ru: 'Насыщенный шоколадный коктейль.', az: 'Zəngin şokolad milkşeyk.', tr: 'Yoğun çikolatalı milkshake.' }), ingredients: t({ en: ['Chocolate ice cream', 'Milk', 'Cocoa'], ru: ['Шоколадное мороженое', 'Молоко', 'Какао'], az: ['Şokolad dondurması', 'Süd', 'Kakao'], tr: ['Çikolatalı dondurma', 'Süt', 'Kakao'] }), price: 4, weight: 400, calories: 380, allergens: '["Dairy"]', is_vegetarian: 1, sizes: t([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]), sort_order: 3 },
     { category_id: shakeId, name: t({ en: 'Strawberry Milkshake', ru: 'Клубничный коктейль', az: 'Çiyələk Milkşeyk', tr: 'Çilekli Milkshake' }), description: t({ en: 'Strawberry milkshake.', ru: 'Клубничный коктейль.', az: 'Çiyələk milkşeyk.', tr: 'Çilekli milkshake.' }), ingredients: t({ en: ['Strawberry', 'Ice cream', 'Milk'], ru: ['Клубника', 'Мороженое', 'Молоко'], az: ['Çiyələk', 'Dondurma', 'Süd'], tr: ['Çilek', 'Dondurma', 'Süt'] }), price: 4, weight: 400, calories: 350, allergens: '["Dairy"]', is_vegetarian: 1, sizes: t([{ label: 'S', price: 4 }, { label: 'M', price: 5 }]), sort_order: 4 },
 
     // Tea Selection
     { category_id: teaId, name: t({ en: 'English Breakfast', ru: 'Английский завтрак', az: 'İngilis Səhər Çayı', tr: 'İngiliz Kahvaltı Çayı' }), description: t({ en: 'Classic full-bodied black tea.', ru: 'Классический насыщенный чёрный чай.', az: 'Klassik dolğun qara çay.', tr: 'Klasik dolgun siyah çay.' }), ingredients: t({ en: ['Black tea'], ru: ['Чёрный чай'], az: ['Qara çay'], tr: ['Siyah çay'] }), price: 2.5, weight: 250, calories: 2, is_vegetarian: 1, is_vegan: 1, sort_order: 1 },
     { category_id: teaId, name: t({ en: 'Earl Grey', ru: 'Эрл Грей', az: 'Earl Grey', tr: 'Earl Grey' }), description: t({ en: 'Black tea with bergamot.', ru: 'Чёрный чай с бергамотом.', az: 'Berqamotlu qara çay.', tr: 'Bergamotlu siyah çay.' }), ingredients: t({ en: ['Black tea', 'Bergamot'], ru: ['Чёрный чай', 'Бергамот'], az: ['Qara çay', 'Berqamot'], tr: ['Siyah çay', 'Bergamot'] }), price: 2.5, weight: 250, calories: 2, is_vegetarian: 1, is_vegan: 1, sort_order: 2 },
     { category_id: teaId, name: t({ en: 'Green Tea', ru: 'Зелёный чай', az: 'Yaşıl Çay', tr: 'Yeşil Çay' }), description: t({ en: 'Light & refreshing green tea.', ru: 'Лёгкий освежающий зелёный чай.', az: 'Yüngül və təravətli yaşıl çay.', tr: 'Hafif ve ferahlatıcı yeşil çay.' }), ingredients: t({ en: ['Green tea'], ru: ['Зелёный чай'], az: ['Yaşıl çay'], tr: ['Yeşil çay'] }), price: 2.5, weight: 250, calories: 2, is_vegetarian: 1, is_vegan: 1, sort_order: 3 },
-    { category_id: teaId, name: t({ en: 'Chamomile', ru: 'Ромашковый', az: 'Çobanyastığı', tr: 'Papatya' }), description: t({ en: 'Soothing caffeine-free herbal tea.', ru: 'Успокаивающий травяной чай без кофеина.', az: 'Sakitləşdirici kofeinsiz bitki çayı.', tr: 'Yatıştırıcı kafeinsiz bitki çayı.' }), ingredients: t({ en: ['Chamomile flowers'], ru: ['Цветы ромашки'], az: ['Çobanyastığı çiçəkləri'], tr: ['Papatya çiçekleri'] }), price: 2.5, weight: 250, calories: 2, is_vegetarian: 1, is_vegan: 1, sort_order: 4 },
-    { category_id: teaId, name: t({ en: 'Mint Tea', ru: 'Мятный чай', az: 'Nanə Çayı', tr: 'Nane Çayı' }), description: t({ en: 'Fresh & aromatic mint tea.', ru: 'Свежий ароматный мятный чай.', az: 'Təzə və ətirli nanə çayı.', tr: 'Taze ve aromatik nane çayı.' }), ingredients: t({ en: ['Mint leaves'], ru: ['Листья мяты'], az: ['Nanə yarpaqları'], tr: ['Nane yaprakları'] }), price: 2.5, weight: 250, calories: 2, is_vegetarian: 1, is_vegan: 1, sort_order: 5 },
-    { category_id: teaId, name: t({ en: 'Fruit Tea', ru: 'Фруктовый чай', az: 'Meyvə Çayı', tr: 'Meyve Çayı' }), description: t({ en: "Ask our staff for today's flavors.", ru: 'Спросите у персонала о вкусах дня.', az: 'Günün dadları üçün işçilərimizdən soruşun.', tr: 'Günün aromaları için personelimize sorun.' }), ingredients: t({ en: ['Dried fruits', 'Herbs'], ru: ['Сухофрукты', 'Травы'], az: ['Qurudulmuş meyvələr', 'Otlar'], tr: ['Kuru meyveler', 'Otlar'] }), price: 3, weight: 250, calories: 5, is_vegetarian: 1, is_vegan: 1, sort_order: 6 },
 
     // Sweets & Extras
-    { category_id: sweetsId, name: t({ en: 'Butter Croissant', ru: 'Круассан с маслом', az: 'Kərə Yağlı Kruassan', tr: 'Tereyağlı Kruvasan' }), description: t({ en: 'Flaky all-butter croissant.', ru: 'Слоёный масляный круассан.', az: 'Qatlı kərə yağlı kruassan.', tr: 'Katmer tereyağlı kruvasan.' }), ingredients: t({ en: ['Flour', 'Butter', 'Yeast'], ru: ['Мука', 'Масло', 'Дрожжи'], az: ['Un', 'Kərə yağı', 'Maya'], tr: ['Un', 'Tereyağı', 'Maya'] }), price: 2.5, weight: 70, calories: 270, allergens: '["Gluten","Dairy"]', is_vegetarian: 1, sort_order: 1 },
-    { category_id: sweetsId, name: t({ en: 'Chocolate Croissant', ru: 'Шоколадный круассан', az: 'Şokoladlı Kruassan', tr: 'Çikolatalı Kruvasan' }), description: t({ en: 'Croissant filled with chocolate.', ru: 'Круассан с шоколадной начинкой.', az: 'Şokolad dolğulu kruassan.', tr: 'Çikolata dolgulu kruvasan.' }), ingredients: t({ en: ['Flour', 'Butter', 'Dark chocolate'], ru: ['Мука', 'Масло', 'Тёмный шоколад'], az: ['Un', 'Kərə yağı', 'Tünd şokolad'], tr: ['Un', 'Tereyağı', 'Bitter çikolata'] }), price: 3, weight: 80, calories: 320, allergens: '["Gluten","Dairy"]', is_vegetarian: 1, sort_order: 2 },
     { category_id: sweetsId, name: t({ en: 'Cookies', ru: 'Печенье', az: 'Peçenye', tr: 'Kurabiye' }), description: t({ en: 'Freshly baked cookies.', ru: 'Свежеиспечённое печенье.', az: 'Təzə bişirilmiş peçenye.', tr: 'Taze pişmiş kurabiye.' }), ingredients: t({ en: ['Flour', 'Butter', 'Sugar', 'Chocolate chips'], ru: ['Мука', 'Масло', 'Сахар', 'Шоколадная крошка'], az: ['Un', 'Kərə yağı', 'Şəkər', 'Şokolad parçaları'], tr: ['Un', 'Tereyağı', 'Şeker', 'Çikolata parçaları'] }), price: 2, weight: 60, calories: 250, allergens: '["Gluten","Dairy"]', is_vegetarian: 1, sort_order: 3 },
-    { category_id: sweetsId, name: t({ en: 'Cheesecake', ru: 'Чизкейк', az: 'Çizkeyk', tr: 'Cheesecake' }), description: t({ en: 'Creamy New York style cheesecake.', ru: 'Сливочный чизкейк по-нью-йоркски.', az: 'Kremvari Nyu-York üslublu çizkeyk.', tr: 'Kremalı New York usulü cheesecake.' }), ingredients: t({ en: ['Cream cheese', 'Biscuit base', 'Sugar'], ru: ['Сливочный сыр', 'Печенье', 'Сахар'], az: ['Krem pendir', 'Peçenye əsası', 'Şəkər'], tr: ['Krem peynir', 'Bisküvi tabanı', 'Şeker'] }), price: 4.5, weight: 150, calories: 400, allergens: '["Gluten","Dairy","Eggs"]', is_vegetarian: 1, is_featured: 1, sort_order: 4 },
-    { category_id: sweetsId, name: t({ en: 'Brownie', ru: 'Брауни', az: 'Brauni', tr: 'Brownie' }), description: t({ en: 'Fudgy chocolate brownie.', ru: 'Шоколадный брауни.', az: 'Yumşaq şokoladlı brauni.', tr: 'Yoğun çikolatalı brownie.' }), ingredients: t({ en: ['Dark chocolate', 'Butter', 'Flour', 'Eggs'], ru: ['Тёмный шоколад', 'Масло', 'Мука', 'Яйца'], az: ['Tünd şokolad', 'Kərə yağı', 'Un', 'Yumurta'], tr: ['Bitter çikolata', 'Tereyağı', 'Un', 'Yumurta'] }), price: 3.5, weight: 120, calories: 420, allergens: '["Gluten","Dairy","Eggs"]', is_vegetarian: 1, sort_order: 5 },
 
     // Add-ons
-    { category_id: addonId, name: t({ en: 'Extra Espresso Shot', ru: 'Доп. шот эспрессо', az: 'Əlavə Espresso Shot', tr: 'Ekstra Espresso Shot' }), description: t({ en: 'An extra shot of espresso.', ru: 'Дополнительная порция эспрессо.', az: 'Əlavə bir espresso shotu.', tr: 'Ekstra bir espresso shot.' }), ingredients: t({ en: ['Espresso'], ru: ['Эспрессо'], az: ['Espresso'], tr: ['Espresso'] }), price: 1, weight: 30, calories: 5, is_vegetarian: 1, is_vegan: 1, sort_order: 1 },
     { category_id: addonId, name: t({ en: 'Flavored Syrup', ru: 'Сироп со вкусом', az: 'Dadlı Sirop', tr: 'Aromalı Şurup' }), description: t({ en: 'Vanilla, Caramel or Hazelnut.', ru: 'Ваниль, карамель или фундук.', az: 'Vanil, karamel və ya fındıq.', tr: 'Vanilya, karamel veya fındık.' }), ingredients: t({ en: ['Flavored syrup'], ru: ['Ароматный сироп'], az: ['Dadlı sirop'], tr: ['Aromalı şurup'] }), price: 0.75, weight: 20, calories: 50, is_vegetarian: 1, is_vegan: 1, sort_order: 2 },
     { category_id: addonId, name: t({ en: 'Oat / Almond Milk', ru: 'Овсяное / Миндальное молоко', az: 'Yulaf / Badam Südü', tr: 'Yulaf / Badem Sütü' }), description: t({ en: 'Plant-based milk alternative.', ru: 'Растительная альтернатива молоку.', az: 'Bitki əsaslı süd alternativi.', tr: 'Bitkisel süt alternatifi.' }), ingredients: t({ en: ['Oat milk or almond milk'], ru: ['Овсяное или миндальное молоко'], az: ['Yulaf və ya badam südü'], tr: ['Yulaf veya badem sütü'] }), price: 1, weight: 50, calories: 30, allergens: '["Nuts"]', is_vegetarian: 1, is_vegan: 1, sort_order: 3 },
-    { category_id: addonId, name: t({ en: 'Whipped Cream', ru: 'Взбитые сливки', az: 'Çırpılmış Qaymaq', tr: 'Krem Şanti' }), description: t({ en: 'A topping of whipped cream.', ru: 'Топпинг из взбитых сливок.', az: 'Çırpılmış qaymaq əlavəsi.', tr: 'Krem şanti eklemesi.' }), ingredients: t({ en: ['Whipped cream'], ru: ['Взбитые сливки'], az: ['Çırpılmış qaymaq'], tr: ['Krem şanti'] }), price: 0.75, weight: 30, calories: 80, allergens: '["Dairy"]', is_vegetarian: 1, sort_order: 4 },
   ];
 
   const insDish = db.prepare(`INSERT INTO dishes (category_id, name, description, ingredients, price, old_price, weight, calories, protein, fat, carbs, allergens, sizes, is_featured, spice_level, is_vegetarian, is_vegan, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   for (const d of dishes) {
+    // Never seed a dish without a real photo (DISH_PHOTOS is the source of truth).
+    if (!DISH_PHOTOS[JSON.parse(d.name).en]) continue;
     insDish.run(d.category_id, d.name, d.description || null, d.ingredients || null, d.price, d.old_price || null, d.weight || null, d.calories || null, d.protein || null, d.fat || null, d.carbs || null, d.allergens || '[]', d.sizes || '[]', d.is_featured || 0, d.spice_level || 0, d.is_vegetarian || 0, d.is_vegan || 0, d.sort_order || 0);
   }
 
