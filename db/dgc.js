@@ -147,7 +147,7 @@ function initDgcDB() {
     wifi_name: 'DriverGC_Guest',
     wifi_password: 'gameon',
     opening_hours: JSON.stringify({ monday: '12:00–02:00', tuesday: '12:00–02:00', wednesday: '12:00–02:00', thursday: '12:00–02:00', friday: '12:00–04:00', saturday: '12:00–04:00', sunday: '12:00–02:00' }),
-    menu_url: 'https://www.menyuqr.com',
+    menu_url: 'https://game-center.bahram.site',
     admin_password: 'admin123',
     primary_language: 'az',
     currency_rates: JSON.stringify({ AZN: 1, USD: 0.588, EUR: 0.541, GBP: 0.461, AED: 2.16, TRY: 20.1, RUB: 54.2 }),
@@ -162,9 +162,10 @@ function initDgcDB() {
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
 
-  // Heal a default menu_url that points at the API host instead of the frontend.
-  const frontendMenuUrl = 'https://www.menyuqr.com';
-  db.prepare("UPDATE settings SET value = ? WHERE key = 'menu_url' AND value IN ('http://localhost:5174', 'http://localhost:3000')").run(frontendMenuUrl);
+  // Heal a default menu_url that points at the API host or the old shared
+  // menyuqr.com domain instead of the dedicated gaming-club frontend.
+  const frontendMenuUrl = 'https://game-center.bahram.site';
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'menu_url' AND value IN ('http://localhost:5174', 'http://localhost:3000', 'https://www.menyuqr.com', 'https://www.menyuqr.com/driver-game-center')").run(frontendMenuUrl);
 
   // Normalize any local /uploads-dgc/* image to its Cloudinary delivery URL when
   // Cloudinary is configured (same deterministic mapping as the coffee menu).

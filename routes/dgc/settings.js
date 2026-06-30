@@ -6,7 +6,6 @@ const { dgcAuth } = require('../../middleware/dgcAuth');
 const router = express.Router();
 
 const PRIVATE_KEYS = new Set(['admin_password']);
-const RESTAURANT_SLUG = 'driver-game-center';
 
 function readSettings(db) {
   const rows = db.prepare('SELECT key, value FROM settings').all();
@@ -43,8 +42,8 @@ router.put('/', dgcAuth, (req, res) => {
   res.json(readSettings(db));
 });
 
-// Generate a PNG data-URL QR code for the menu URL. The slug is added to the
-// path so the QR opens the gaming-club menu directly. Supports an optional
+// Generate a PNG data-URL QR code for the menu URL. The QR opens the
+// gaming-club menu at the configured domain. Supports an optional
 // `table` or `cabinet` query param (cabinet QRs unlock the cabinet-only menu).
 router.post('/qrcode', dgcAuth, async (req, res) => {
   const db = getDgcDB();
@@ -52,10 +51,9 @@ router.post('/qrcode', dgcAuth, async (req, res) => {
   const base = url || db.prepare("SELECT value FROM settings WHERE key = 'menu_url'").get()?.value || '';
   if (!base) return res.status(400).json({ error: 'No menu_url configured' });
 
+  // The gaming-club menu is served on its own dedicated domain at the root, so
+  // we point the QR straight at it (no `/driver-game-center` slug path).
   let target = base.replace(/\/+$/, '');
-  if (!new RegExp(`/${RESTAURANT_SLUG}(/|\\?|$)`).test(target)) {
-    target = `${target}/${RESTAURANT_SLUG}`;
-  }
   const qs = [];
   if (table != null && table !== '') qs.push(`table=${encodeURIComponent(table)}`);
   if (cabinet != null && cabinet !== '') qs.push(`cabinet=${encodeURIComponent(cabinet)}`);
