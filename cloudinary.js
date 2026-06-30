@@ -20,8 +20,8 @@ if (isConfigured) {
 // Upload a local file or buffer to the Cloudinary "coffee" folder.
 // `publicId` (optional) keeps uploads stable/overwritable (e.g. dish slug).
 // Returns the secure HTTPS URL of the uploaded image.
-async function uploadImage(filePathOrBuffer, publicId) {
-  const opts = { folder: FOLDER, resource_type: 'image', overwrite: true };
+async function uploadImage(filePathOrBuffer, publicId, folder = FOLDER) {
+  const opts = { folder, resource_type: 'image', overwrite: true };
   if (publicId) opts.public_id = publicId;
 
   if (Buffer.isBuffer(filePathOrBuffer)) {

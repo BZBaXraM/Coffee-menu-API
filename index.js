@@ -10,10 +10,27 @@ const fs = require('fs');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
 const { initDB } = require('./db/database');
+const { initDgcDB } = require('./db/dgc');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+// Two WebSocket channels share one HTTP server: '/ws' (coffee orders) and
+// '/dgc/ws' (Driver Game Center cabinet timers + orders). Attaching two
+// path-bound WebSocketServers to the same server makes them fight over the
+// upgrade handshake (each aborts the other's path with HTTP 400), so both use
+// noServer mode and a single upgrade router dispatches by pathname.
+const wss = new WebSocketServer({ noServer: true });
+const dgcWss = new WebSocketServer({ noServer: true });
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url, 'http://localhost');
+  if (pathname === '/ws') {
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  } else if (pathname === '/dgc/ws') {
+    dgcWss.handleUpgrade(req, socket, head, (ws) => dgcWss.emit('connection', ws, req));
+  } else {
+    socket.destroy();
+  }
+});
 const PORT = process.env.PORT || 3000;
 
 function broadcast(data) {
@@ -23,20 +40,29 @@ function broadcast(data) {
   });
 }
 
-module.exports = { broadcast };
+function broadcastDgc(data) {
+  const msg = JSON.stringify(data);
+  dgcWss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(msg);
+  });
+}
+
+module.exports = { broadcast, broadcastDgc };
 
 initDB();
+initDgcDB();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Driver Game Center local image fallback (mirrors /uploads for the coffee menu).
+app.use('/uploads-dgc', express.static(path.join(__dirname, 'uploads-dgc')));
 // Fresh checkouts keep seeded menu photos in drink-photo/, while DB rows use
 // /uploads/*.png. Keep those public URLs working without requiring a copy step.
 app.use('/uploads', express.static(path.join(__dirname, 'drink-photo')));
 app.use('/drink-photo', express.static(path.join(__dirname, 'drink-photo')));
 app.use('/samples', express.static(path.join(__dirname, 'samples')));
-app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
@@ -47,9 +73,13 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/settings', require('./routes/settings'));
 
-app.get('/mekanlar', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'mekanlar.html'));
-});
+// Driver Game Center (gaming club) — fully isolated from the coffee menu above.
+app.use('/api/dgc/menu', require('./routes/dgc/menu'));
+app.use('/api/dgc/cabinets', require('./routes/dgc/cabinets'));
+app.use('/api/dgc/orders', require('./routes/dgc/orders'));
+app.use('/api/dgc/ai', require('./routes/dgc/ai'));
+app.use('/api/dgc/settings', require('./routes/dgc/settings'));
+app.use('/api/dgc/admin', require('./routes/dgc/admin'));
 
 const clientDist = path.join(__dirname, 'client/dist');
 if (process.env.NODE_ENV === 'production' && fs.existsSync(clientDist)) {
@@ -75,6 +105,7 @@ server.on('error', handleServerError);
 // ws re-emits the server's 'error' on the WebSocketServer instance, so it needs
 // its own handler — otherwise EADDRINUSE crashes here before handleServerError runs.
 wss.on('error', handleServerError);
+dgcWss.on('error', handleServerError);
 
 server.listen(PORT, () => {
   console.log(`✅ QR Menu backend running on port ${PORT}`);
